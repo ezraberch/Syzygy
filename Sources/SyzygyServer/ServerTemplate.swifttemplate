@@ -1,0 +1,31 @@
+import Vapor
+import SyzygyServer
+
+<%_ for type in Set(types.classes.filter {$0.annotations["SyzygyServer"] != nil}.flatMap {$0.instanceMethods}.flatMap {$0.returnType}) { -%>
+    <%_ %>extension <%= type.name %> : Content {}
+<%_ } -%>
+<%_ for type in types.classes.filter {$0.annotations["SyzygyServer"] != nil} { -%>
+
+extension <%= type.name _%> : SyzygyServerProtocol {
+    public func configure(app: Application) {
+    <%_ for method in type.instanceMethods { %>
+        app.post("<%= method.callName _%>") { req -> <%= method.returnTypeName != nil ? "\(method.returnTypeName)" : "SyzygyResponse<\(method.returnTypeName)>" %> in
+            <%_ if method.parameters.count > 0 { -%>
+            struct Arguments : Content {
+            <%_ for param in method.parameters { -%>
+                let <%= param.name %> :  <%= param.typeName %><%_ %>
+            <%_ } -%>
+            }
+            
+            let args = try req.content.decode(Arguments.self)
+            <%_ } -%>
+            <%_ if method.returnTypeName == nil { -%>
+            return SyzygyResponse<<%= method.returnTypeName %>>(response: self.<%= method.callName %>(<%= method.parameters.map({return $0.name + ": " + $0.name}).joined(separator: ",") %>))
+            <%_ } else { -%>
+            return <%= method.returnTypeName.name == "String" ? "\"\\\"\\(" : ""  %>self.<%= method.callName %>(<%= method.parameters.map({return $0.name + ": args." + $0.name}).joined(separator: ",") %>)<%= method.returnTypeName.name == "String" ? ")\\\"\"" : ""  %>
+            <%_ } -%>
+        }
+    <% } _%>
+    }
+}
+<% } -%>
